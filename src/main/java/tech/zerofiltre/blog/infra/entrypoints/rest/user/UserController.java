@@ -22,6 +22,8 @@ import tech.zerofiltre.blog.domain.course.model.Course;
 import tech.zerofiltre.blog.domain.error.*;
 import tech.zerofiltre.blog.domain.logging.LoggerProvider;
 import tech.zerofiltre.blog.domain.metrics.MetricsProvider;
+import tech.zerofiltre.blog.domain.newsletter.NewsletterProvider;
+import tech.zerofiltre.blog.domain.newsletter.features.newsletter.NewsletterService;
 import tech.zerofiltre.blog.domain.user.*;
 import tech.zerofiltre.blog.domain.user.features.*;
 import tech.zerofiltre.blog.domain.user.model.User;
@@ -65,9 +67,18 @@ public class UserController {
     private final FindArticle findArticle;
     private final GenerateToken generateToken;
     private final CourseService courseService;
+    private final NewsletterService newsletterService;
 
-
-    public UserController(UserProvider userProvider, MetricsProvider metricsProvider, UserNotificationProvider userNotificationProvider, ArticleProvider articleProvider, VerificationTokenProvider verificationTokenProvider, MessageSource sources, PasswordEncoder passwordEncoder, SecurityContextManager securityContextManager, PasswordVerifierProvider passwordVerifierProvider, InfraProperties infraProperties, GithubLoginProvider githubLoginProvider, AvatarProvider profilePictureGenerator, VerificationTokenProvider tokenProvider, ReactionProvider reactionProvider, JwtTokenProvider jwtTokenProvider, LoggerProvider loggerProvider, TagProvider tagProvider, CourseProvider courseProvider, ArticleViewProvider articleViewProvider) {
+    public UserController(UserProvider userProvider, MetricsProvider metricsProvider,
+                          UserNotificationProvider userNotificationProvider, ArticleProvider articleProvider,
+                          VerificationTokenProvider verificationTokenProvider, MessageSource sources,
+                          PasswordEncoder passwordEncoder, SecurityContextManager securityContextManager,
+                          PasswordVerifierProvider passwordVerifierProvider, InfraProperties infraProperties,
+                          GithubLoginProvider githubLoginProvider, AvatarProvider profilePictureGenerator,
+                          VerificationTokenProvider tokenProvider, ReactionProvider reactionProvider,
+                          JwtTokenProvider jwtTokenProvider, LoggerProvider loggerProvider, TagProvider tagProvider,
+                          CourseProvider courseProvider, ArticleViewProvider articleViewProvider,
+                          NewsletterProvider newsletterProvider) {
         this.userProvider = userProvider;
         this.registerUser = new RegisterUser(userProvider, profilePictureGenerator, metricsProvider);
         this.notifyRegistrationComplete = new NotifyRegistrationComplete(userNotificationProvider);
@@ -87,6 +98,7 @@ public class UserController {
         this.deleteUser = new DeleteUser(userProvider, articleProvider, tokenProvider, reactionProvider, courseProvider, loggerProvider);
         this.generateToken = new GenerateToken(verificationTokenProvider, jwtTokenProvider, userProvider);
         this.courseService = new CourseService(courseProvider, tagProvider, loggerProvider);
+        this.newsletterService = new NewsletterService(userProvider, newsletterProvider);
 
     }
 
@@ -108,6 +120,10 @@ public class UserController {
         } catch (RuntimeException e) {
             log.error("We were unable to send the registration confirmation email", e);
         }
+
+        // TODO : By default, all users are subscribe the newsletter
+        // TODO : That's why we should create here the subscription to the newsletter for the user.
+        newsletterService.init(user.getId());
 
         return new ResponseEntity<>(token, HttpStatus.CREATED);
     }
@@ -177,6 +193,10 @@ public class UserController {
     public String deleteUser(@PathVariable("id") long userId, HttpServletRequest request) throws ZerofiltreException {
         User user = securityContextManager.getAuthenticatedUser();
         deleteUser.execute(user, userId);
+
+        // TODO : We should also unsubscribe the user.
+        newsletterService.unsubscribeUser(user.getId());
+
         return sources.getMessage("message.delete.user.success", null, request.getLocale());
     }
 
